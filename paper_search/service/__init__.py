@@ -1,1 +1,3 @@
-# Service layer — will be populated in later tasks.
+from .search_service import PaperSearchService
+
+__all__ = ["PaperSearchService"]
