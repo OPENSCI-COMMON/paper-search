@@ -202,9 +202,25 @@ async def download_and_export():
 }
 ```
 
-#### Claude Code 配置
+#### Claude Code (CLI) 配置
 
-在 Claude Code 的 MCP 设置中添加即可，支持 stdio 传输。
+```bash
+# 添加为全局 MCP Server（所有项目可用）
+claude mcp add --scope user paper-search -- \
+  uv run --directory /path/to/paper-search -m paper_search.transports.mcp_server
+
+# 或仅当前项目可用
+claude mcp add paper-search -- \
+  uv run --directory /path/to/paper-search -m paper_search.transports.mcp_server
+
+# 如需配置 API Key
+claude mcp add --scope user paper-search \
+  -e PAPER_SEARCH_MCP_UNPAYWALL_EMAIL=your@email.com \
+  -e PAPER_SEARCH_MCP_SEMANTIC_SCHOLAR_API_KEY=sk-xxx \
+  -- uv run --directory /path/to/paper-search -m paper_search.transports.mcp_server
+```
+
+添加后重启 Claude Code 即可在对话中直接使用论文搜索工具。
 
 ---
 
