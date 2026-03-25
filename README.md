@@ -222,6 +222,24 @@ claude mcp add --scope user paper-search \
 
 添加后重启 Claude Code 即可在对话中直接使用论文搜索工具。
 
+#### 局域网 / 远程访问（HTTP 模式）
+
+MCP Server 支持三种传输模式：`stdio`（默认）、`sse`、`streamable-http`。
+
+```bash
+# 启动 HTTP 模式（局域网可访问）
+uv run -m paper_search.transports.mcp_server --transport streamable-http --host 0.0.0.0 --port 8000
+
+# 或 SSE 模式
+uv run -m paper_search.transports.mcp_server --transport sse --host 0.0.0.0 --port 8000
+```
+
+其他机器的 Claude Code 通过 URL 连接：
+
+```bash
+claude mcp add --scope user paper-search --transport http http://192.168.x.x:8000/mcp
+```
+
 ---
 
 ## 配置
@@ -275,6 +293,9 @@ uv run pytest tests/ -v
 
 # 启动 MCP Server（stdio 模式）
 uv run paper-search-mcp
+
+# 启动 MCP Server（HTTP 模式，局域网可访问）
+uv run paper-search-mcp --transport streamable-http --host 0.0.0.0 --port 8000
 ```
 
 ---
