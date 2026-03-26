@@ -157,6 +157,47 @@ class PaperSearchService:
             errors=layer_errors,
         )
 
+    async def recommend(
+        self,
+        paper_id: str,
+        max_results: int = 10,
+    ) -> SearchResult:
+        """Find similar papers using Semantic Scholar embedding-based recommendations.
+
+        Args:
+            paper_id: Semantic Scholar paper ID, or DOI:<doi>, ARXIV:<id>, etc.
+            max_results: Maximum number of recommendations.
+        """
+        semantic = self.registry.get("semantic")
+        if semantic is None:
+            return SearchResult(
+                query=f"recommend:{paper_id}",
+                sources_requested="semantic",
+                errors={"semantic": "Semantic Scholar connector not available"},
+            )
+
+        try:
+            papers = await asyncio.to_thread(
+                semantic.get_recommendations, paper_id, max_results
+            )
+        except Exception as exc:
+            return SearchResult(
+                query=f"recommend:{paper_id}",
+                sources_requested="semantic",
+                errors={"semantic": str(exc)},
+            )
+
+        deduped = self._dedupe_papers(papers)
+        return SearchResult(
+            query=f"recommend:{paper_id}",
+            sources_requested="semantic",
+            sources_used=["semantic"],
+            source_results={"semantic": len(deduped)},
+            papers=deduped,
+            total=len(deduped),
+            raw_total=len(papers),
+        )
+
     @staticmethod
     async def _async_search(
         connector: PaperConnector,

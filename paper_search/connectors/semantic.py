@@ -469,6 +469,52 @@ class SemanticConnector(PaperConnector):
             return None
 
 
+    def get_recommendations(self, paper_id: str, max_results: int = 10) -> List[Paper]:
+        """Get recommended papers based on embedding similarity (not citation graph).
+
+        Uses the Semantic Scholar Recommendations API which finds papers with
+        similar content using paper embedding vectors.
+
+        Args:
+            paper_id: Semantic Scholar paper ID or DOI:xxx / ARXIV:xxx format.
+            max_results: Maximum number of recommendations to return.
+        Returns:
+            List of similar Paper objects.
+        """
+        try:
+            fields = [
+                "title", "abstract", "year", "citationCount", "authors",
+                "url", "publicationDate", "externalIds", "fieldsOfStudy", "openAccessPdf",
+            ]
+            # Recommendations API uses POST with a single positive paper
+            url = f"https://api.semanticscholar.org/recommendations/v1/papers"
+            api_key = self.get_api_key()
+            headers = {"Content-Type": "application/json"}
+            if api_key:
+                headers["x-api-key"] = api_key
+            payload = {
+                "positivePaperIds": [paper_id],
+            }
+            params = {
+                "fields": ",".join(fields),
+                "limit": max_results,
+            }
+            response = self.session.post(
+                url, json=payload, params=params, headers=headers, timeout=30
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            papers: List[Paper] = []
+            for item in (data.get("recommendedPapers") or []):
+                paper = self._parse_paper(item)
+                if paper:
+                    papers.append(paper)
+            return papers[:max_results]
+        except Exception as e:
+            logger.error(f"get_recommendations failed for {paper_id}: {e}")
+            return []
+
     def get_references(self, paper_id: str, max_results: int = 20) -> List[Paper]:
         """Get papers referenced by the given paper (backward snowball).
 

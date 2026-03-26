@@ -80,6 +80,25 @@ async def snowball_search(
 
 
 @mcp.tool()
+async def recommend_papers(
+    paper_id: str,
+    max_results: int = 10,
+) -> Dict[str, Any]:
+    """Find similar papers using embedding-based recommendations (not citation graph).
+
+    Uses Semantic Scholar's paper embeddings to find content-similar papers.
+
+    Args:
+        paper_id: Semantic Scholar paper ID, or DOI:<doi>, ARXIV:<id>, etc.
+        max_results: Max number of recommendations.
+    """
+    result = await search_service.recommend(paper_id, max_results)
+    data = result.model_dump()
+    data["papers"] = [p.to_api_dict() for p in result.papers]
+    return data
+
+
+@mcp.tool()
 async def export_papers(
     papers: List[Dict[str, Any]],
     format: str = "csv",
