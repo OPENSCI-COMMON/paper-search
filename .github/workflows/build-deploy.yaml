@@ -1,0 +1,105 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches:
+      - main          # → test 环境
+      - 'release/*'   # → staging 环境
+      - production    # → production 环境
+
+env:
+  AWS_REGION: ap-southeast-1
+  APP_NAME: paper-search
+  ECR_REPOSITORY: 982081089978.dkr.ecr.ap-southeast-1.amazonaws.com/paper-search
+  INFRA_REPO: DEV-OpenSCI/desci-infra
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Determine environment
+        id: env
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "ENV=test" >> $GITHUB_OUTPUT
+            echo "Target environment: test"
+          elif [[ "${{ github.ref }}" == refs/heads/release/* ]]; then
+            echo "ENV=staging" >> $GITHUB_OUTPUT
+            echo "Target environment: staging"
+          elif [[ "${{ github.ref }}" == "refs/heads/production" ]]; then
+            echo "ENV=production" >> $GITHUB_OUTPUT
+            echo "Target environment: production"
+          else
+            echo "ENV=none" >> $GITHUB_OUTPUT
+            echo "Skipping deployment for branch: ${{ github.ref }}"
+          fi
+
+      - name: Configure AWS credentials
+        if: steps.env.outputs.ENV != 'none'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        if: steps.env.outputs.ENV != 'none'
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Docker image
+        if: steps.env.outputs.ENV != 'none'
+        id: build
+        run: |
+          IMAGE_TAG="${{ github.sha }}"
+          FULL_IMAGE="${{ env.ECR_REPOSITORY }}:${IMAGE_TAG}"
+
+          echo "Building image: ${FULL_IMAGE}"
+          docker build -t ${FULL_IMAGE} .
+
+          echo "Pushing image to ECR..."
+          docker push ${FULL_IMAGE}
+
+          # 同时打上环境标签
+          ENV_TAG="${{ env.ECR_REPOSITORY }}:${{ steps.env.outputs.ENV }}-latest"
+          docker tag ${FULL_IMAGE} ${ENV_TAG}
+          docker push ${ENV_TAG}
+
+          echo "image_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
+          echo "Image pushed successfully"
+
+      - name: Update Infra repository
+        if: steps.env.outputs.ENV != 'none'
+        run: |
+          echo "Updating infra repository..."
+
+          git clone https://x-access-token:${{ secrets.INFRA_REPO_TOKEN }}@github.com/${{ env.INFRA_REPO }}.git infra-repo
+          cd infra-repo
+
+          cd apps/${{ env.APP_NAME }}/overlays/${{ steps.env.outputs.ENV }}
+
+          kustomize edit set image ${{ env.ECR_REPOSITORY }}=${{ env.ECR_REPOSITORY }}:${{ steps.build.outputs.image_tag }}
+
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add .
+          git commit -m "deploy: ${{ env.APP_NAME }} ${{ steps.env.outputs.ENV }} - ${{ github.sha }}"
+          git push
+
+          echo "Infra repository updated"
+
+      - name: Deployment summary
+        if: steps.env.outputs.ENV != 'none'
+        run: |
+          echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Item | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Application | ${{ env.APP_NAME }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Environment | ${{ steps.env.outputs.ENV }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Image Tag | ${{ steps.build.outputs.image_tag }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Commit | ${{ github.sha }} |" >> $GITHUB_STEP_SUMMARY
