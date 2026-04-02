@@ -7,7 +7,7 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends gcc libxml2-dev libxslt1-dev && \
     rm -rf /var/lib/apt/lists/*
 
-COPY pyproject.toml ./
+COPY pyproject.toml README.md ./
 COPY paper_search/ paper_search/
 
 RUN pip install --no-cache-dir ".[mcp]"
